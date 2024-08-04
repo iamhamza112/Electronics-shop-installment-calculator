@@ -1,7 +1,13 @@
 import streamlit as st
-from fpdf import FPDF
+import numpy as np
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
 from io import BytesIO
 from datetime import datetime
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 # Function to calculate monthly installment
 def calculate_installment(principal, annual_rate, months):
@@ -19,52 +25,66 @@ def calculate_total_payment(installment, months, advance_payment):
 # Function to generate PDF
 def generate_pdf(item_name, customer_name, plans):
     buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+
+    # Title
+    styles = getSampleStyleSheet()
+    title_style = styles['Title']
+    title = Paragraph("Electronics Plan Details", title_style)
+    elements.append(title)
+
+    # Customer Name and Date/Item Info
+    info_style = styles['Normal']
+    customer_info = Paragraph(f"Customer: {customer_name}", info_style)
+    date_info = Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d')}", info_style)
+    item_info = Paragraph(f"Item: {item_name}", info_style)
     
-    class PDF(FPDF):
-        def header(self):
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, 'Electronics Plan Details', 0, 1, 'C')
-            self.ln(10)
-        
-        def footer(self):
-            self.set_y(-15)
-            self.set_font('Arial', 'I', 8)
-            self.cell(0, 10, 'Opp. Tariq Cash And Carry Sunder Road, Raiwind', 0, 0, 'L')
-            self.set_y(-10)
-            self.cell(0, 10, 'Made by Patla', 0, 0, 'C')
-    
-    pdf = PDF()
-    pdf.add_page()
-    
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, f'Customer: {customer_name}', 0, 1, 'L')
-    pdf.cell(0, 10, f'Date: {datetime.now().strftime("%Y-%m-%d")}', 0, 1, 'L')
-    pdf.cell(0, 10, f'Item: {item_name}', 0, 1, 'L')
-    pdf.ln(10)
-    
-    # Table headers
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(45, 10, 'Plan', 1)
-    pdf.cell(45, 10, 'Advance Payment', 1)
-    pdf.cell(45, 10, 'Total Payment', 1)
-    pdf.cell(45, 10, 'Monthly Installment', 1)
-    pdf.ln()
-    
-    # Table rows
-    pdf.set_font('Arial', '', 12)
+    elements.append(customer_info)
+    elements.append(date_info)
+    elements.append(item_info)
+
+    # Table Data
+    data = [
+        ["Plan", "Advance Payment", "Total Payment", "Monthly Installment"]
+    ]
+
     for plan in plans:
-        pdf.cell(45, 10, plan['Plan'], 1)
-        pdf.cell(45, 10, f"${plan['Advance Payment']:.2f}", 1)
-        pdf.cell(45, 10, f"${plan['Total Payment in Installments']:.2f}", 1)
-        pdf.cell(45, 10, f"${plan['Monthly Installment']:.2f}", 1)
-        pdf.ln()
+        data.append([
+            plan['Plan'],
+            f"${plan['Advance Payment']:.2f}",
+            f"${plan['Total Payment in Installments']:.2f}",
+            f"${plan['Monthly Installment']:.2f}"
+        ])
+
+    # Table Style
+    table = Table(data, colWidths=[2*inch]*4, rowHeights=0.5*inch)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+
+    # Add table to elements
+    elements.append(table)
+
+    # Footer
+    footer_style = styles['Normal']
+    footer_address = Paragraph("Opp. Tariq Cash And Carry Sunder Road, Raiwind", footer_style)
+    footer_credit = Paragraph("Made by Patla", footer_style)
     
-    pdf.output(buffer)
+    elements.append(footer_address)
+    elements.append(footer_credit)
+    
+    doc.build(elements)
+    
     buffer.seek(0)
     return buffer
 
 # Streamlit interface
-st.title("Installment Plan c")
+st.title("Installment Plan Calculator")
 
 # Inputs
 item_name = st.text_input("Item Name", value="Sample Item")
